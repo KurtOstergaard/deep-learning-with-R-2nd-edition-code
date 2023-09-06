@@ -2,29 +2,104 @@
 title: "Deep Learning notes"
 author: "Kurt"
 date: "2023-09-05"
-output: html_document
+output: 
+  html_document: 
+    keep_md: yes
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+
+## Loading data options
+```{r setup, eval=TRUE, echo=FALSE}
+library(tensorflow)
+library(keras)
+mnist <- dataset_mnist()
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+####  unadvised
+```{r unadvised_load, eval=FALSE}
+# train_images <- mnist$train$x
+# train_labels <- mnist$train$y
+# test_images <- mnist$test$x
+# test_labels <- mnist$test$y
 ```
 
-## Including Plots
+#### Preferred
+```{r preferred_load, eval=TRUE}
+c(c(train_images, train_labels), c(test_images, test_labels)) %<-% mnist
 
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+#### Data structure
+
+```{r train-str}
+str(train_images)
+str(train_labels)
+
+```
+```{r test-str}
+str(test_images)
+str(test_labels)
+
+```
+#### Network architecture
+The model consists of a sequence of two dense, fully connected, neural layers.
+The second layer is a 10-way softmax classification layer, which returns an 
+array of 10 probability scores, which sum to one. Each score is the probability 
+the current digit image belongs to one of the 10 digit classes.
+```{r model}
+model <- keras_model_sequential(list(
+  layer_dense(units = 512, activation = "relu"),
+  layer_dense(units = 10, activation = "softmax")
+))
+```
+#### Compilation step
+To train, the model needs an optimizer, a loss function and metrics.
+* The optimizer is how the model updates itself to improve performance.
+* The loss function measures performance on the training data.
+* Metrics measure and monitor the accuracy of the performance.
+
+```{r compile}
+compile(model,
+        optimizer = "rmsprop",
+        loss = "sparse_categorical_crossentropy",
+        metrics = "accuracy")
+```
+
+#### Reshape the data
+From 60k different 28 by 28 pixel images as matrices, with a range of integer 
+values in [0, 255], to 60k vectors length 784, which is 28 * 28, with scaled 
+with double values in [0, 1].
+```{r reshape}
+train_images <- array_reshape(train_images, c(60000, 28 * 28))
+train_images <- train_images / 255
+test_images <- array_reshape(test_images, c(10000, 28 * 28))
+test_images <- test_images / 255
+```
+
+#### Fit the model
+
+```{r fit}
+fit(model, train_images, train_labels, epochs = 5, batch_size = 128)
+
+```
+Results look overfitted after second epoch. The loss increases and the acuracy deteriorates.
+
+#### Prediction with the model
+Make predictions with test data
+```{r predict}
+test_digits <- test_images[1:10, ]
+predictions <- predict(model, test_digits)
+str(predictions)
+predictions[1, ]
+test_labels[1]
+```
+The 0.982 is in the 8th place of the probability output vector. 
+The digits start at zero, so it predicts 7.
+
+#### Evaluate the model
+Check the accuracy
+```{r metrics}
+metrics <- evaluate(model, test_images, test_labels)
+        metrics["accuracy"]
+```
+89.89% for this run. 
